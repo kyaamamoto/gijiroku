@@ -11,6 +11,8 @@
 
 デプロイしている場合はURLを記入（任意）
 
+https://kyaamamoto.github.io/gijiroku/
+
 ## ④作ったアプリケーション用のIDまたはPasswordがある場合
 
 - ID: なし
