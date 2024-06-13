@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>音声認識議事録生成ツール</title>
+     <!-- 正しいライブラリURLを使用 -->
+    <script src="https://cdn.jsdelivr.net/npm/docx@7.6.0/build/index.min.js"></script>
+    <link rel="stylesheet" href="./css/style.css">
+    
+    <script>
+        window.addEventListener('load', () => {
+            if (typeof window.docx === 'undefined') {
+                console.error('docx library is not loaded.');
+                alert('docx library is not loaded. Please check the console for details.');
+            } else {
+                console.log('docx library loaded successfully.');
+            }
+        });
+    </script>
+</head>
+<body>
+    <div id="wrap">
+        <div id="imgzouuu">
+            <img src="./img/ZOUUUbanner.png" alt="zouuu">
+        </div>
+        <h2>音声認識議事録生成ツール</h2>
+        <div id="btnAll">
+            <button id="btnStart">start</button>
+            <button id="btnStop">stop</button>
+            <button id="btnSave">save</button>
+            <button id="clear">clear</button>
+        </div>
+        <div id="content">
+            <textarea id="meetingSummary" placeholder="議事録がここに表示されます"></textarea>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+    // もしdocxライブラリが読み込まれていない場合、エラーメッセージを表示します。
+    if (typeof window.docx === 'undefined') {
+        console.error('docx library is not loaded.');
+        alert('docx library is not loaded. Please check the console for details.');
+        return;
+    }
+
+    // ブラウザが音声を認識するための準備をします。
+    window.SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'ja-JP'; // 音声認識の言語を日本語に設定
+    recognition.interimResults = false; // 中間結果を無効にする
+    recognition.continuous = true; // 音声認識を継続する
+
+    // ボタンとテキストエリアの要素を取得します。
+    const startButton = document.getElementById('btnStart');
+    const stopButton = document.getElementById('btnStop');
+    const saveButton = document.getElementById('btnSave');
+    const clearButton = document.getElementById('clear');
+    const meetingSummaryElement = document.getElementById('meetingSummary');
+
+    let isStopping = false; // 音声認識を停止するかどうかのフラグ
+    let isRecognizing = false; // 音声認識が実行中かどうかのフラグ
+    let meetingText = ''; // 認識された音声を保存するための変数
+
+    // スタートボタンがクリックされたときの処理
+    startButton.addEventListener('click', () => {
+        if (!isRecognizing) {
+            isStopping = false;
+            console.log('音声認識を開始');
+            recognition.start(); // 音声認識を開始
+            isRecognizing = true; // 音声認識が開始されたことを記録
+        }
+    });
+
+    // ストップボタンがクリックされたときの処理
+    stopButton.addEventListener('click', () => {
+        if (isRecognizing) {
+            isStopping = true;
+            console.log('音声認識を停止');
+            recognition.stop(); // 音声認識を停止
+            isRecognizing = false; // 音声認識が停止されたことを記録
+        }
+    });
+
+    // セーブボタンがクリックされたときの処理
+    saveButton.addEventListener('click', async () => {
+        try {
+            const summary = await generateSummary(meetingText); // 音声認識されたテキストを要約
+            saveNotes(summary); // 要約された内容をWordファイルとして保存
+        } catch (error) {
+            console.error('Error generating summary:', error);
+            alert('Error generating summary. Please check the console for details.');
+        }
+    });
+
+    // クリアボタンがクリックされたときの処理
+    clearButton.addEventListener('click', () => {
+        meetingSummaryElement.value = ''; // テキストエリアをクリア
+        location.reload(); // ページをリロード
+    });
+
+    // 音声認識が結果を返したときの処理
+    recognition.onresult = (event) => {
+        console.log('onresultイベントが発生');
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+            if (event.results[i].isFinal) {
+                const autotext = event.results[i][0].transcript;
+                console.log('認識結果:', autotext);
+                meetingText += autotext + ' '; // 認識されたテキストを保存
+                meetingSummaryElement.value = meetingText; // テキストエリアに表示
+            }
+        }
+    };
+
+    // 音声認識が終了したときの処理
+    recognition.onend = () => {
+        console.log('音声認識が終了');
+        if (!isStopping) {
+            console.log('音声認識を再開');
+            recognition.start(); // 音声認識を再開
+            isRecognizing = true;
+        }
+    };
+
+    // 音声認識でエラーが発生したときの処理
+    recognition.onerror = (event) => {
+        console.error('音声認識エラー:', event);
+        if (!isStopping) {
+            console.log('音声認識を再開');
+            recognition.start(); // 音声認識を再開
+            isRecognizing = true;
+        }
+    };
+
+    // ChatGPT APIを使って要約を生成する関数
+    async function generateSummary(transcript) {
+        const OPENAI_API_URL = 'https://api.openai.com/v1/completions';
+        const API_KEY = '';  // ここに正しいAPIキーを設定してください
+
+        try {
+            const response = await fetch(OPENAI_API_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${API_KEY}`
+                },
+                body: JSON.stringify({
+                    model: 'gpt-3.5-turbo-instruct',
+                    prompt: `テキストの内容を日本語で議事録の書式にあわせて、誰が読んでもわかるように情報を整えてください。:\n${transcript}`,
+                    max_tokens: 1000
+                })
+            });
+
+            if (!response.ok) {
+                const errorDetail = await response.json();
+                console.error('API request failed:', errorDetail);
+                throw new Error(`API request failed with status ${response.status}`);
+            }
+
+            const data = await response.json();
+
+            if (!data.choices || !data.choices[0] || !data.choices[0].text) {
+                throw new Error('Unexpected API response format');
+            }
+
+            return data.choices[0].text.trim();
+        } catch (error) {
+            console.error('Error generating summary:', error);
+            alert('Error generating summary. Please check the console for details.');
+            throw error;
+        }
+    }
+
+    // 要約をWordファイルとして保存する関数
+    function saveNotes(notes) {
+        const { Document, Packer, Paragraph } = window.docx;
+
+        const doc = new Document({
+            sections: [{
+                properties: {},
+                children: [
+                    new Paragraph({
+                        text: notes,
+                        spacing: { after: 200 },
+                    })
+                ],
+            }],
+        });
+
+        Packer.toBlob(doc).then(blob => {
+            const anchor = document.createElement('a');
+            anchor.download = 'meeting_notes.docx';
+            anchor.href = URL.createObjectURL(blob);
+            anchor.click();
+        });
+    }
+});
+    </script>
